@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ユーザー（Clerkで管理、最小限の情報のみDB保存）
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique // ClerkのユーザーID
+  email     String   @unique
+  name      String?
+
+  positions Position[]
+  badges    UserBadge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ポジション（保有銘柄）
+model Position {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 銘柄情報
+  stockCode   String   // 銘柄コード（例: 7203）
+  stockName   String   // 銘柄名（例: トヨタ自動車）
+
+  // 購入情報
+  purchaseDate   DateTime
+  purchasePrice  Float    // 購入価格
+  quantity       Int      // 購入株数
+
+  // Blind Mode設定
+  blindModeEnabled   Boolean  @default(false)
+  unlockable         Boolean  @default(true)  // 解除可能か（解除不可モード）
+
+  // 出口戦略
+  targetProfitRate   Float    // 利確条件（例: 0.20 = 20%）
+  stopLossRate       Float    // 損切り条件（例: -0.10 = -10%）
+
+  // ステータス
+  status    String   @default("ACTIVE")  // ACTIVE, CLOSED
+  closedAt  DateTime?
+  closePrice Float?   // 決済価格
+  closeReason String? // 決済理由（TARGET_REACHED, STOP_LOSS, MANUAL）
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stockCode])
+  @@map("positions")
+}
+
+// バッジ定義
+model Badge {
+  id          String   @id @default(cuid())
+  key         String   @unique  // 例: "iron_will_bronze"
+  name        String              // 例: "鉄の意志 Bronze"
+  description String              // 例: "Blind Modeで7日間運用"
+  icon        String              // 絵文字またはアイコンパス
+  condition   Json                // 条件（JSON）
+
+  userBadges UserBadge[]
+
+  createdAt DateTime @default(now())
+
+  @@map("badges")
+}
+
+// ユーザーが獲得したバッジ
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+
+  earnedAt  DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+// 株価履歴（キャッシュ用）
+model StockPrice {
+  id        String   @id @default(cuid())
+  stockCode String
+  price     Float
+  date      DateTime @default(now())
+
+  @@unique([stockCode, date])
+  @@index([stockCode])
+  @@map("stock_prices")
+}
+
+// 通知履歴
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+
+  type      String   // TARGET_REACHED, STOP_LOSS, MILESTONE, ENCOURAGEMENT
+  title     String
+  message   String
+
+  read      Boolean  @default(false)
+  sentAt    DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
