@@ -1,0 +1,30 @@
+import { initTRPC, TRPCError } from '@trpc/server';
+import { Context } from './context';
+import superjson from 'superjson';
+
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+});
+
+/**
+ * Export reusable router and procedure helpers
+ */
+export const router = t.router;
+export const publicProcedure = t.procedure;
+
+/**
+ * Protected procedure
+ * Ensures the user is authenticated via Clerk
+ */
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.auth.userId) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      auth: ctx.auth,
+    },
+  });
+});
